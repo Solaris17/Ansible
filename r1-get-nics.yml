@@ -1,0 +1,15 @@
+# Gather facts so we can poll the NICs
+- hosts: "{{ r1server }}:&r1servers"
+  become: yes
+  gather_facts: yes
+
+  tasks:
+
+    - name: List Interfaces
+      shell: ip a | grep inet | sort
+      register: nic_output
+    - debug:
+        msg: 
+        - "The NICs you can choose from are listed below."
+        - "{{ nic_output.stdout_lines }}"
+        - "Listing interfaces complete."

@@ -1,0 +1,99 @@
+# Hosts: for R1 servers are written with surveys at the beginning.
+- hosts: "{{ r1server }}:&r1servers"
+  become: yes
+  gather_facts: yes
+  vars:
+   vlan:
+   ip:
+   interface:
+
+# Needs all var fields to write correctly!
+
+  tasks:
+
+# Backup the file first
+# Ubuntu
+    - name: Create directory first (Ubuntu)
+      file:
+       path: /etc/network/backup/ip-add
+       state: directory
+      when: ansible_distribution == 'Ubuntu'
+
+    - name: Backup network config before allowing work (Ubuntu).
+      ansible.builtin.copy:
+       src: /etc/network/interfaces
+       dest: /etc/network/backup/ip-add/interfaces-{{ansible_date_time.iso8601}}.bak
+       remote_src: yes
+       follow: no
+      when: ansible_distribution == 'Ubuntu'
+
+# Centos
+    - name: Create directory first (CentOS)
+      file:
+       path: /etc/sysconfig/backup/ip-add
+       state: directory
+      when: ansible_distribution == 'CentOS'
+
+    - name: Backup network config before allowing work (CentOS).
+      ansible.builtin.copy:
+       src: /etc/sysconfig/network-scripts
+       dest: /etc/sysconfig/backup/ip-add/network-scripts-{{ansible_date_time.iso8601}}
+       remote_src: yes
+       follow: no
+      when: ansible_distribution == 'CentOS'
+# End Backup Block
+
+# Begin Ubuntu Block
+
+    - name: Update IP Addresses (Ubuntu)
+      blockinfile:
+       state: present
+       insertafter: EOF
+       path: /etc/network/interfaces
+       marker: "\n# {mark} Interface Config for VLAN {{ vlan }}\n"
+       block: |
+        auto {{ interface }}.{{ vlan }}
+        iface {{ interface }}.{{ vlan }} inet static
+        address {{ ip }}
+        netmask 255.255.255.0
+      when: ansible_distribution == 'Ubuntu'
+
+# End Ubuntu Block
+
+# Begin Centos Block
+
+    - name: Update IP Addresses (CentOS)
+      blockinfile:
+       state: present
+       insertafter: EOF
+       path: /etc/sysconfig/network-scripts/ifcfg-{{ interface }}.{{ vlan }}
+       block: |
+        DEVICE={{ interface }}.{{ vlan }}
+        BOOTPROTO=static
+        IPADDR={{ ip }}
+        NETMASK=255.255.255.0
+        ONBOOT=yes
+        VLAN=yes
+       create: yes
+      when: ansible_distribution == 'CentOS'
+
+# End Centos Block
+
+# Need to ifup the iface after
+
+    - name: Up Interface
+      shell: ifup {{ interface }}.{{ vlan }}
+      register: ifup_output
+    - debug:
+        msg: 
+        - "{{ ifup_output.stdout_lines }}"
+
+
+# Wrap up
+    - name: List Interface
+      ansible.builtin.debug:
+        msg: 
+        - "The Following Interfaces were created and brought up."
+        - "{{ interface }}.{{ vlan }}"
+        - "With IP address: {{ ip }}"
+        - "All Done."

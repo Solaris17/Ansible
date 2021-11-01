@@ -1,0 +1,79 @@
+# Only needs host, interface and vlan vars for removals
+- hosts: "{{ r1server }}:&r1servers"
+  become: yes
+  gather_facts: yes
+  vars:
+   vlan:
+   interface:
+
+# Need to ifdown the iface first or the removal will break active connections and require a service/device reboot
+  tasks:
+
+    - name: Bringing down the Interface
+      shell: ifdown {{ interface }}.{{ vlan }}
+      register: ifdown_output
+    - debug:
+        msg: 
+        - "{{ ifdown_output.stdout_lines }}"
+
+# Backup the file first
+# Ubuntu
+    - name: Create directory first (Ubuntu)
+      file:
+       path: /etc/network/backup/ip-remove
+       state: directory
+      when: ansible_distribution == 'Ubuntu'
+
+    - name: Backup network config before allowing work (Ubuntu).
+      ansible.builtin.copy:
+       src: /etc/network/interfaces
+       dest: /etc/network/backup/ip-remove/interfaces-{{ansible_date_time.iso8601}}.bak
+       remote_src: yes
+       follow: no
+      when: ansible_distribution == 'Ubuntu'
+
+# Centos
+    - name: Create directory first (CentOS)
+      file:
+       path: /etc/sysconfig/backup/ip-remove
+       state: directory
+      when: ansible_distribution == 'CentOS'
+
+    - name: Backup network config before allowing work (CentOS).
+      ansible.builtin.copy:
+       src: /etc/sysconfig/network-scripts
+       dest: /etc/sysconfig/backup/ip-remove/network-scripts-{{ansible_date_time.iso8601}}
+       remote_src: yes
+       follow: no
+      when: ansible_distribution == 'CentOS'
+# End Backup Block
+
+# Begin Ubuntu Block
+# Block: needs to be empty quotes to indicate it wants you to remove it.
+
+    - name: Remove IP Addresses (Ubuntu)
+      blockinfile:
+       path: /etc/network/interfaces
+       marker: "# {mark} Interface Config for VLAN {{ vlan }}"
+       block: ""
+      when: ansible_distribution == 'Ubuntu'
+
+# End Ubuntu Block
+
+# Begin Centos Block
+
+    - name: Remove IP Addresses (CentOS)
+      ansible.builtin.file:
+       path: /etc/sysconfig/network-scripts/ifcfg-{{ interface }}.{{ vlan }}
+       state: absent
+      when: ansible_distribution == 'CentOS'
+
+# End Centos Block
+
+# Wrap up
+    - name: List Interface
+      ansible.builtin.debug:
+        msg: 
+        - "The Following Interfaces were brought down and removed."
+        - "{{ interface }}.{{ vlan }}"
+        - "All Done."

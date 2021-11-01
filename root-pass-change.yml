@@ -1,0 +1,15 @@
+- hosts: "{{ target }}"
+  become: yes
+  gather_facts: yes
+  vars:
+   var_user:
+   var_password:
+
+  tasks:
+
+    - name: Password Change
+
+      user:
+        name: "{{ var_user }}"
+        password: "{{ var_password | password_hash('sha512') }}" # This needs to pass to hash function or password change bugs out.
+        update_password: always
